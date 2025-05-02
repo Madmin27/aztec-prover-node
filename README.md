@@ -18,7 +18,7 @@ Skrip ini mengotomatisasi pengaturan **Prover Node**, **Proving Broker**, dan **
 ## Langkah Penggunaan
 1. **Clone Repositori**:
    ```bash
-   git clone https://github.com/USERNAME/aztec-prover-setup.git
+   git clone https://github.com/0xmugi/aztec-prover-node.git
    cd aztec-prover-setup
    ```
    Ganti `USERNAME` dengan nama pengguna GitHub.
