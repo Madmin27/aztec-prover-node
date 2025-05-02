@@ -31,11 +31,38 @@ if ! lsb_release -a 2>/dev/null | grep -q "Ubuntu"; then
   exit 1
 fi
 
+# Function to check port availability
+check_ports() {
+  echo "Memeriksa ketersediaan port..."
+  for port in 8080 40400; do
+    if nc -z localhost $port 2>/dev/null; then
+      echo "Error: Port $port sudah digunakan. Pastikan port ini bebas."
+      exit 1
+    fi
+  done
+  echo "Port 8080 dan 40400 tersedia."
+}
+
+# Function to check RPC connectivity
+check_rpc() {
+  if [ -f .env ]; then
+    source .env
+    if [ -n "$ETHEREUM_HOSTS" ]; then
+      echo "Memeriksa konektivitas RPC ($ETHEREUM_HOSTS)..."
+      if ! curl -s -m 5 "$ETHEREUM_HOSTS" > /dev/null; then
+        echo "Warning: Tidak dapat terhubung ke RPC ($ETHEREUM_HOSTS). Pastikan URL valid dan mendukung blob data."
+      else
+        echo "RPC tersedia."
+      fi
+    fi
+  fi
+}
+
 # Function to install prerequisites and Docker
 install_prerequisites() {
   echo "Menginstal prerequisite..."
   sudo apt-get update
-  sudo apt-get install -y curl ca-certificates gnupg lsb-release
+  sudo apt-get install -y curl ca-certificates gnupg lsb-release netcat-openbsd
 
   echo "Menginstal Docker..."
   sudo mkdir -p /etc/apt/keyrings
@@ -102,26 +129,30 @@ ETHEREUM_HOSTS=https://eth-sepolia.g.alchemy.com/v2/your-alchemy-key
 L1_CONSENSUS_HOST_URL=https://sepolia-beacon.drpc.org
 PROVER_PUBLISHER_PRIVATE_KEY=0xYourPrivateKey
 PROVER_ID=0xYourPublicAddress
+P2P_ANNOUNCE_ADDR=/ip4/your-vps-public-ip/tcp/40400
 DATA_DIRECTORY=/data
 LOG_LEVEL=info
 DATA_STORE_MAP_SIZE_KB=134217728
 PROVER_BROKER_HOST=http://broker:8080
 PROVER_AGENT_COUNT=1
 PROVER_AGENT_POLL_INTERVAL_MS=10000
-# P2P_ENABLED=true
+P2P_ENABLED=true
 # PROVER_COORDINATION_NODE_URL=http://:8080
 EOF
 
   echo "File .env telah dibuat di $(pwd)/.env."
   echo "Silakan edit file ini dengan data Anda:"
-  echo "- ETHEREUM_HOSTS: URL RPC Sepolia (contoh: https://eth-sepolia.g.alchemy.com/v2/your-alchemy-key)"
+  echo "- ETHEREUM_HOSTS: URL RPC Sepolia (pastikan mendukung blob data, contoh: https://eth-sepolia.g.alchemy.com/v2/your-alchemy-key)"
   echo "- L1_CONSENSUS_HOST_URL: URL Beacon Chain (contoh: https://sepolia-beacon.drpc.org)"
   echo "- PROVER_PUBLISHER_PRIVATE_KEY: Kunci privat Ethereum (contoh: 0xYourPrivateKey)"
   echo "- PROVER_ID: Alamat publik Ethereum (contoh: 0xYourPublicAddress)"
+  echo "- P2P_ANNOUNCE_ADDR: Alamat publik VPS untuk P2P (contoh: /ip4/203.0.113.1/tcp/40400)"
   echo "Cara edit di SSH:"
   echo "1. Buka file: nano .env"
   echo "2. Edit nilai yang diperlukan."
   echo "3. Simpan: Ctrl+O, Enter, lalu keluar: Ctrl+X"
+  echo "Alternatif: Edit di lokal, lalu unggah ke VPS dengan:"
+  echo "  scp .env user@your-vps-ip:$(pwd)/"
   echo "Setelah selesai mengedit, jalankan skrip lagi dengan:"
   echo "  ./setup-aztec-prover.sh --resume"
   echo "Skrip akan berhenti sekarang."
@@ -156,10 +187,12 @@ services:
       LOG_LEVEL: \${LOG_LEVEL}
       PROVER_BROKER_HOST: \${PROVER_BROKER_HOST}
       PROVER_PUBLISHER_PRIVATE_KEY: \${PROVER_PUBLISHER_PRIVATE_KEY}
+      P2P_ANNOUNCE_ADDR: \${P2P_ANNOUNCE_ADDR}
       DATA_DIRECTORY: \${DATA_DIRECTORY}
       DATA_STORE_MAP_SIZE_KB: \${DATA_STORE_MAP_SIZE_KB}
-      # P2P_ENABLED: \${P2P_ENABLED}
+      P2P_ENABLED: \${P2P_ENABLED}
       # PROVER_COORDINATION_NODE_URL: \${PROVER_COORDINATION_NODE_URL}
+    network_mode: host
     ports:
       - "8080:8080"
       - "40400:40400"
@@ -182,6 +215,9 @@ services:
       PROVER_AGENT_POLL_INTERVAL_MS: \${PROVER_AGENT_POLL_INTERVAL_MS}
       PROVER_BROKER_HOST: \${PROVER_BROKER_HOST}
       PROVER_ID: \${PROVER_ID}
+      P2P_ANNOUNCE_ADDR: \${P2P_ANNOUNCE_ADDR}
+      P2P_ENABLED: \${P2P_ENABLED}
+    network_mode: host
     pull_policy: always
     restart: unless-stopped
 
@@ -199,6 +235,9 @@ services:
       DATA_DIRECTORY: \${DATA_DIRECTORY}
       ETHEREUM_HOSTS: \${ETHEREUM_HOSTS}
       LOG_LEVEL: \${LOG_LEVEL}
+      P2P_ANNOUNCE_ADDR: \${P2P_ANNOUNCE_ADDR}
+      P2P_ENABLED: \${P2P_ENABLED}
+    network_mode: host
     volumes:
       - /home/my-node/node:/data
 EOF
@@ -206,6 +245,9 @@ EOF
 
 # Main logic
 if [ "$RESUME" = false ]; then
+  # Check ports
+  check_ports
+
   # Install prerequisites if Docker not installed
   if ! command -v docker &> /dev/null || ! command -v docker-compose &> /dev/null; then
     install_prerequisites
@@ -237,9 +279,12 @@ if [ "$RESUME" = false ]; then
   if [ ! -f .env ]; then
     create_env_file
   else
-    echo "File .env sudah ada, melewati pembuatan. Pastikan sudah diedit dengan data valid."
+    echo "File .env sudah ada, melewati pembuatan. Pastikan sudah diedit dengan data valid, termasuk P2P_ANNOUNCE_ADDR."
   fi
 fi
+
+# Check RPC connectivity
+check_rpc
 
 # Resume from here if --resume is used
 if [ ! -f docker-compose.yml ]; then
@@ -256,3 +301,4 @@ echo "Selesai! Prover Node, Broker, dan Agent telah diatur."
 echo "Untuk memeriksa status: sudo docker-compose ps"
 echo "Untuk melihat log: sudo docker-compose logs -f"
 echo "Untuk menghentikan: sudo docker-compose down"
+echo "Jika ada error, periksa troubleshooting di README.md."
