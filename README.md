@@ -52,7 +52,7 @@ Skrip ini mengotomatisasi pengaturan **Prover Node**, **Proving Broker**, dan **
      - `L1_CONSENSUS_HOST_URL`: URL Beacon Chain (contoh: `https://sepolia-beacon.drpc.org`).
      - `PROVER_PUBLISHER_PRIVATE_KEY`: Kunci privat Ethereum (contoh: `0xYourPrivateKey`).
      - `PROVER_ID`: Alamat publik Ethereum (contoh: `0xYourPublicAddress`).
-     - `P2P_ANNOUNCE_ADDR`: Alamat publik VPS untuk P2P (contoh: `/ip4/203.0.113.1/tcp/40400`).
+     - `P2P_ANNOUNCE_ADDR`: Alamat publik VPS untuk P2P (contoh: `/ip4/203.0.113.1/tcp/40400`).  (cek pake `curl ifconfig.me`).
    - Simpan: Tekan Ctrl+O, Enter, lalu keluar dengan Ctrl+X.
    - Alternatif: Edit `.env` di komputer lokal, lalu unggah ke VPS:
      ```bash
