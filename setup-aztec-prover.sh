@@ -18,87 +18,86 @@ EOF
 # Exit on any error
 set -e
 
+# Check if resuming
+RESUME=false
+if [ "$1" == "--resume" ]; then
+  RESUME=true
+  echo "Melanjutkan dari langkah terakhir..."
+fi
+
 # Verify running on Ubuntu
 if ! lsb_release -a 2>/dev/null | grep -q "Ubuntu"; then
   echo "Error: Skrip ini hanya untuk Ubuntu Linux."
   exit 1
 fi
 
-# Install prerequisites
-echo "Menginstal prerequisite..."
-sudo apt-get update
-sudo apt-get install -y curl ca-certificates gnupg lsb-release
+# Function to install prerequisites and Docker
+install_prerequisites() {
+  echo "Menginstal prerequisite..."
+  sudo apt-get update
+  sudo apt-get install -y curl ca-certificates gnupg lsb-release
 
-# Install Docker using official repository
-echo "Menginstal Docker..."
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+  echo "Menginstal Docker..."
+  sudo mkdir -p /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+    $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  sudo apt-get update
+  sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 
-# Install Docker Compose
-echo "Menginstal Docker Compose..."
-DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep -oP '"tag_name": "\K[^"]+')
-sudo curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+  echo "Menginstal Docker Compose..."
+  DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+  sudo curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  sudo chmod +x /usr/local/bin/docker-compose
 
-# Start and enable Docker
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker $USER
+  sudo systemctl start docker
+  sudo systemctl enable docker
+  sudo usermod -aG docker $USER
 
-# Verify Docker installation
-if ! command -v docker &> /dev/null; then
-  echo "Error: Docker gagal diinstal. Coba jalankan 'sudo apt-get update && sudo apt-get install -y docker-ce' secara manual."
-  exit 1
-fi
+  # Verify Docker
+  if ! command -v docker &> /dev/null; then
+    echo "Error: Docker gagal diinstal. Coba jalankan 'sudo apt-get update && sudo apt-get install -y docker-ce' secara manual."
+    exit 1
+  fi
 
-# Verify Docker Compose installation
-if ! command -v docker-compose &> /dev/null; then
-  echo "Error: Docker Compose gagal diinstal."
-  exit 1
-fi
+  # Verify Docker Compose
+  if ! command -v docker-compose &> /dev/null; then
+    echo "Error: Docker Compose gagal diinstal."
+    exit 1
+  fi
+}
 
-# Install Node.js and npm (fallback for Aztec CLI)
-echo "Menginstal Node.js dan npm (untuk fallback Aztec CLI)..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-if ! command -v npm &> /dev/null; then
-  echo "Error: npm gagal diinstal."
-  exit 1
-fi
+# Function to install Aztec CLI
+install_aztec_cli() {
+  echo "Menginstal Aztec CLI..."
+  if curl -s https://install.aztec.network | grep -q "404"; then
+    echo "URL https://install.aztec.network tidak valid, beralih ke instalasi via npm..."
+    sudo npm install -g @aztec/cli
+  else
+    echo "y" | bash -i <(curl -s https://install.aztec.network)
+  fi
 
-# Install Aztec CLI
-echo "Menginstal Aztec CLI..."
-if curl -s https://install.aztec.network | grep -q "404"; then
-  echo "URL https://install.aztec.network tidak valid, beralih ke instalasi via npm..."
-  sudo npm install -g @aztec/cli
-else
-  bash -i <(curl -s https://install.aztec.network)
-fi
+  # Verify Aztec CLI
+  if ! command -v aztec-cli &> /dev/null; then
+    echo "Warning: Aztec CLI gagal diinstal. Prover Node mungkin tetap berjalan via Docker, tetapi beberapa perintah CLI tidak akan tersedia."
+  else
+    echo "Aztec CLI berhasil diinstal."
+    echo "Memperbarui Aztec CLI ke versi alpha-testnet..."
+    aztec-cli update alpha-testnet
+  fi
 
-# Verify Aztec CLI installation
-if ! command -v aztec-cli &> /dev/null; then
-  echo "Warning: Aztec CLI gagal diinstal. Prover Node mungkin tetap berjalan via Docker, tetapi beberapa perintah CLI tidak akan tersedia."
-else
-  echo "Aztec CLI berhasil diinstal."
-  # Update Aztec CLI to alpha-testnet
-  echo "Memperbarui Aztec CLI ke versi alpha-testnet..."
-  aztec-cli update alpha-testnet
-fi
+  # Update PATH
+  echo "Memperbarui PATH..."
+  export PATH=$PATH:/root/.aztec/bin
+  echo 'export PATH=$PATH:/root/.aztec/bin' >> ~/.bashrc
+  source ~/.bashrc
+}
 
-# Update PATH
-echo "Memperbarui PATH..."
-export PATH=$PATH:/usr/local/bin
-echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
-source ~/.bashrc
-
-# Create .env file for configuration
-echo "Membuat file .env..."
-cat << EOF > .env
+# Function to create .env file
+create_env_file() {
+  echo "Membuat file .env..."
+  cat << EOF > .env
 ETHEREUM_HOSTS=https://eth-sepolia.g.alchemy.com/v2/your-alchemy-key
 L1_CONSENSUS_HOST_URL=https://sepolia-beacon.drpc.org
 PROVER_PUBLISHER_PRIVATE_KEY=0xYourPrivateKey
@@ -113,20 +112,27 @@ PROVER_AGENT_POLL_INTERVAL_MS=10000
 # PROVER_COORDINATION_NODE_URL=http://:8080
 EOF
 
-# Prompt user to edit .env file
-echo "File .env telah dibuat. Silakan edit file ini dengan data Anda:"
-echo "- ETHEREUM_HOSTS (contoh: Alchemy atau Infura URL untuk Sepolia)"
-echo "- L1_CONSENSUS_HOST_URL (contoh: Quicknode atau dRPC URL untuk beacon chain)"
-echo "- PROVER_PUBLISHER_PRIVATE_KEY (kunci privat Ethereum Anda)"
-echo "- PROVER_ID (alamat publik Ethereum yang sesuai dengan private key)"
-echo "Buka file dengan: nano .env atau editor lain."
-echo "Setelah selesai mengedit, tekan Enter untuk melanjutkan."
-read -p "Tekan Enter untuk melanjutkan..."
+  echo "File .env telah dibuat di $(pwd)/.env."
+  echo "Silakan edit file ini dengan data Anda:"
+  echo "- ETHEREUM_HOSTS: URL RPC Sepolia (contoh: https://eth-sepolia.g.alchemy.com/v2/your-alchemy-key)"
+  echo "- L1_CONSENSUS_HOST_URL: URL Beacon Chain (contoh: https://sepolia-beacon.drpc.org)"
+  echo "- PROVER_PUBLISHER_PRIVATE_KEY: Kunci privat Ethereum (contoh: 0xYourPrivateKey)"
+  echo "- PROVER_ID: Alamat publik Ethereum (contoh: 0xYourPublicAddress)"
+  echo "Cara edit di SSH:"
+  echo "1. Buka file: nano .env"
+  echo "2. Edit nilai yang diperlukan."
+  echo "3. Simpan: Ctrl+O, Enter, lalu keluar: Ctrl+X"
+  echo "Setelah selesai mengedit, jalankan skrip lagi dengan:"
+  echo "  ./setup-aztec-prover.sh --resume"
+  echo "Skrip akan berhenti sekarang."
+  exit 0
+}
 
-# Create Docker Compose file
-echo "Membuat file docker-compose.yml..."
-mkdir -p /home/my-node/node
-cat << EOF > docker-compose.yml
+# Function to create docker-compose.yml
+create_docker_compose() {
+  echo "Membuat file docker-compose.yml..."
+  mkdir -p /home/my-node/node
+  cat << EOF > docker-compose.yml
 name: aztec-prover
 services:
   prover-node:
@@ -196,6 +202,51 @@ services:
     volumes:
       - /home/my-node/node:/data
 EOF
+}
+
+# Main logic
+if [ "$RESUME" = false ]; then
+  # Install prerequisites if Docker not installed
+  if ! command -v docker &> /dev/null || ! command -v docker-compose &> /dev/null; then
+    install_prerequisites
+  else
+    echo "Docker dan Docker Compose sudah terinstal, melewati langkah ini."
+  fi
+
+  # Install Node.js and npm (for Aztec CLI fallback)
+  if ! command -v npm &> /dev/null; then
+    echo "Menginstal Node.js dan npm (untuk fallback Aztec CLI)..."
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    if ! command -v npm &> /dev/null; then
+      echo "Error: npm gagal diinstal."
+      exit 1
+    fi
+  else
+    echo "Node.js dan npm sudah terinstal, melewati langkah ini."
+  fi
+
+  # Install Aztec CLI if not installed
+  if ! command -v aztec-cli &> /dev/null; then
+    install_aztec_cli
+  else
+    echo "Aztec CLI sudah terinstal, melewati langkah ini."
+  fi
+
+  # Create .env if it doesn't exist
+  if [ ! -f .env ]; then
+    create_env_file
+  else
+    echo "File .env sudah ada, melewati pembuatan. Pastikan sudah diedit dengan data valid."
+  fi
+fi
+
+# Resume from here if --resume is used
+if [ ! -f docker-compose.yml ]; then
+  create_docker_compose
+else
+  echo "File docker-compose.yml sudah ada, melewati pembuatan."
+fi
 
 # Start Docker Compose services
 echo "Menjalankan layanan Prover Node..."
