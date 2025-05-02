@@ -19,10 +19,9 @@ Skrip ini mengotomatisasi pengaturan **Prover Node**, **Proving Broker**, dan **
 ## Langkah Penggunaan
 1. **Clone Repositori**:
    ```bash
-   git clone https://github.com/USERNAME/aztec-prover-setup.git
-   cd aztec-prover-setup
+   git clone https://github.com/0xmugi/aztec-prover-node.git
+   cd aztec-prover-node
    ```
-   Ganti `USERNAME` dengan nama pengguna GitHub.
 
 2. **Beri Izin Skrip**:
    ```bash
@@ -47,10 +46,6 @@ Skrip ini mengotomatisasi pengaturan **Prover Node**, **Proving Broker**, dan **
      - `PROVER_PUBLISHER_PRIVATE_KEY`: Kunci privat Ethereum (contoh: `0xYourPrivateKey`).
      - `PROVER_ID`: Alamat publik Ethereum (contoh: `0xYourPublicAddress`).
    - Simpan: Tekan Ctrl+O, Enter, lalu keluar dengan Ctrl+X.
-   - Alternatif: Edit `.env` di komputer lokal, lalu unggah ke VPS:
-     ```bash
-     scp .env user@your-vps-ip:/path/to/aztec-prover-setup/
-     ```
 
 5. **Lanjutkan Skrip**:
    - Jalankan lagi untuk melanjutkan:
