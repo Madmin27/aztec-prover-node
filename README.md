@@ -16,6 +16,10 @@ Skrip ini mengotomatisasi pengaturan **Prover Node**, **Proving Broker**, dan **
 - **Git**: Untuk meng-clone repositori.
 - **SSH Akses**: Untuk VPS, pastikan bisa mengedit file via `nano` atau unggah file via `scp`.
 
+# PENTING
+## [KLIK INI BUAT RPC ALCHEMY](https://www.alchemy.com/)
+## [KLIK INI BUAT dRPC](https://drpc.org/)
+
 ## Langkah Penggunaan
 1. **Clone Repositori**:
    ```bash
