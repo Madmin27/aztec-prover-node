@@ -1,4 +1,4 @@
-ontentType="text/markdown">
+ContentType="text/markdown">
 # Aztec Prover Node Setup
 
 Skrip ini mengotomatisasi pengaturan **Prover Node**, **Proving Broker**, dan **Proving Agent** untuk jaringan Aztec alpha-testnet menggunakan Docker Compose. Prover Node menghasilkan bukti kriptografi untuk transaksi publik dan mengirimkan rollup proof ke Ethereum.
